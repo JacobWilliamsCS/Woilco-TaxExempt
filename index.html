@@ -8,6 +8,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;background:#F0EEE9;color:#1a1a18;min-height:100vh}
 header{background:#1C1C1A;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.logo{height:40px;width:auto;margin-right:16px}
 header h1{font-size:16px;font-weight:600;color:#fff}
 header p{font-size:12px;color:#888;margin-top:1px}
 .hright{display:flex;align-items:center;gap:10px}
@@ -86,6 +87,8 @@ tbody tr:hover .row-actions{opacity:1}
 </head>
 <body>
 <header>
+  <!-- Company Logo -->
+  <img src="woco-logo2.png" alt="Warrenton Oil Company Logo" class="logo"/>
   <div>
     <h1>Tax Exempt Customer Search</h1>
     <p>Warrenton Oil Company &mdash; 2026 Master List</p>
@@ -194,27 +197,36 @@ tbody tr:hover .row-actions{opacity:1}
 <div class="toast" id="toast"></div>
 
 <script>
+// ════════════════════════════════════════════════════════════════════════════════
+// TAX EXEMPT CUSTOMER SEARCH - Main Application
+// ════════════════════════════════════════════════════════════════════════════════
+
+// ── Configuration ──────────────────────────────────────────────────────────────
 var SB_URL = 'https://eyspyzphorvoyhimisja.supabase.co';
 var SB_KEY = 'sb_publishable_vFVJ5quZIRcef9UPCLNfeA__EsuXiC4';
 var PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // PIN: 1234
 
-var D = [], filtered = [], sc = 'b', sd = 'asc', pg = 1, PG = 75;
-var unlocked = false, editId = null;
+// ── Global State ───────────────────────────────────────────────────────────────
+var D = [], filtered = [], sc = 'b', sd = 'asc', pg = 1, PG = 75;  // D=all data, filtered=search results, sc=sort column, sd=sort direction, pg=current page, PG=page size
+var unlocked = false, editId = null;  // unlocked=editor mode, editId=record being edited
 
-// ── API ───────────────────────────────────────────────────────────────────
+// ── API Functions ─────────────────────────────────────────────────────────────
+// Supabase REST API configuration
 var headers = {'apikey': SB_KEY, 'Authorization': 'Bearer '+SB_KEY, 'Content-Type': 'application/json'};
 
+// Generic API fetch wrapper for Supabase database calls
 async function apiFetch(path, opts) {
   var res = await fetch(SB_URL + '/rest/v1/' + path, Object.assign({headers: headers}, opts||{}));
   if (!res.ok) { var e = await res.text(); throw new Error(e); }
   return res.status === 204 ? null : res.json();
 }
 
+// Load all tax exempt records from database
 async function loadAll() {
   document.getElementById('loading').style.display = 'block';
   document.getElementById('empty').style.display = 'none';
   try {
-    // Fetch all records with pagination
+    // Fetch all records with pagination support
     var all = [], from = 0, batch = 1000;
     while(true) {
       var chunk = await apiFetch('tax_exempt?select=*&order=business_name.asc&limit='+batch+'&offset='+from, {
@@ -243,9 +255,10 @@ function pd(s) {
   return new Date(y, parseInt(p[0])-1, parseInt(p[1]));
 }
 
+// Populate filter dropdowns with unique states and license types from data
 function populateFilters() {
-  var states = [...new Set(D.map(function(d){return d.s}).filter(Boolean))].sort();
-  var types  = [...new Set(D.map(function(d){return d.t}).filter(Boolean))].sort();
+  var states = [...new Set(D.map(function(d){return d.s}).filter(Boolean))].sort();  // Extract unique states
+  var types  = [...new Set(D.map(function(d){return d.t}).filter(Boolean))].sort();   // Extract unique license types
   var ss=document.getElementById('sf'), ts=document.getElementById('tf');
   var sv=ss.value, tv=ts.value;
   ss.innerHTML='<option value="">All states</option>'+states.map(function(s){return'<option>'+s+'</option>'}).join('');
@@ -254,17 +267,19 @@ function populateFilters() {
   if(types.includes(tv))ts.value=tv;
 }
 
+// Update warning badge showing expired and soon-to-expire records
 function updateWarn() {
   var now=new Date();now.setHours(0,0,0,0);
-  var c90=new Date(now.getTime()+90*86400000);
-  var exp=D.filter(function(d){var dt=pd(d.e);return dt&&dt<now}).length;
-  var soon=D.filter(function(d){var dt=pd(d.e);return dt&&dt>=now&&dt<=c90}).length;
+  var c90=new Date(now.getTime()+90*86400000);  // 90 days from now
+  var exp=D.filter(function(d){var dt=pd(d.e);return dt&&dt<now}).length;       // Count expired records
+  var soon=D.filter(function(d){var dt=pd(d.e);return dt&&dt>=now&&dt<=c90}).length;  // Count expiring within 90 days
   var wp=document.getElementById('wpill');
   if(exp||soon){wp.style.display='';var parts=[];if(exp)parts.push(exp.toLocaleString()+' expired');if(soon)parts.push(soon.toLocaleString()+' expiring within 90 days');document.getElementById('wlabel').textContent=parts.join(' · ');}
   else wp.style.display='none';
 }
 
-// ── Search ────────────────────────────────────────────────────────────────
+// ── Search & Filter Functions ─────────────────────────────────────────────────
+// Apply text search and filters to update displayed records
 function onSearch() {
   var q=document.getElementById('q').value.toLowerCase().trim();
   var stF=document.getElementById('sf').value, tyF=document.getElementById('tf').value, exF=document.getElementById('ef').value;
@@ -285,7 +300,9 @@ function onSearch() {
   doSort();pg=1;render();
 }
 
+// Toggle sort by column (ascending/descending)
 function sortBy(col){if(sc===col)sd=sd==='asc'?'desc':'asc';else{sc=col;sd='asc';}doSort();pg=1;render();}
+// Perform actual sorting of filtered data
 function doSort(){
   filtered.sort(function(a,b){
     var av=a[sc]||'',bv=b[sc]||'';
@@ -297,13 +314,16 @@ function doSort(){
   if(idx>=0)document.querySelectorAll('thead th')[idx].classList.add(sd);
 }
 
+// HTML escape special characters to prevent XSS
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+// Get badge class name based on license type
 function bc(t){if(t==='Government')return 'gov';if(t==='Govt/Church')return 'church';return 'ag';}
 
+// Render the data table with current page of filtered results
 function render(){
-  var total=Math.max(1,Math.ceil(filtered.length/PG));if(pg>total)pg=total;
-  var start=(pg-1)*PG,slice=filtered.slice(start,start+PG);
-  var now=new Date();now.setHours(0,0,0,0);var c90=new Date(now.getTime()+90*86400000);
+  var total=Math.max(1,Math.ceil(filtered.length/PG));if(pg>total)pg=total;  // Calculate total pages
+  var start=(pg-1)*PG,slice=filtered.slice(start,start+PG);                     // Get current page data
+  var now=new Date();now.setHours(0,0,0,0);var c90=new Date(now.getTime()+90*86400000);  // Calculate date thresholds for warnings
   document.getElementById('showing').textContent='Showing '+filtered.length.toLocaleString()+' of '+D.length.toLocaleString();
   document.getElementById('hcount').textContent=D.length.toLocaleString()+' records';
   var tbody=document.getElementById('tbody'),empty=document.getElementById('empty');
@@ -319,25 +339,31 @@ function render(){
   renderPager(total);
 }
 
+// Render pagination controls
 function renderPager(total){
-  if(total<=1){document.getElementById('pager').innerHTML='';return;}
-  var h='';
-  h+='<button onclick="goPage('+(pg-1)+')" '+(pg===1?'disabled':'')+'>&#8592;</button>';
+  if(total<=1){document.getElementById('pager').innerHTML='';return;}  // Hide pager if only one page
+  var h='';  // HTML accumulator
+  h+='<button onclick="goPage('+(pg-1)+')" '+(pg===1?'disabled':'')+'>&#8592;</button>';  // Previous page button
   var range=[];for(var i=1;i<=total;i++){if(i===1||i===total||Math.abs(i-pg)<=2)range.push(i);else if(range[range.length-1]!=='...')range.push('...');}
   range.forEach(function(r){if(r==='...')h+='<span style="padding:0 4px;color:#ccc">...</span>';else h+='<button class="'+(r===pg?'active':'')+'" onclick="goPage('+r+')">'+r+'</button>';});
   h+='<button onclick="goPage('+(pg+1)+')" '+(pg===total?'disabled':'')+'>&#8594;</button>';
   h+='<span class="pinfo">'+(((pg-1)*PG+1).toLocaleString())+'&ndash;'+(Math.min(pg*PG,filtered.length).toLocaleString())+' of '+filtered.length.toLocaleString()+'</span>';
   document.getElementById('pager').innerHTML=h;
 }
+// Go to specific page
 function goPage(p){pg=p;render();window.scrollTo(0,0);}
 
-// ── PIN ───────────────────────────────────────────────────────────────────
+// ── Authentication & Editor Mode ──────────────────────────────────────────────
+// Hash PIN using SHA-256 to verify against stored hash
 async function hashPin(pin){var buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pin));return [...new Uint8Array(buf)].map(function(x){return x.toString(16).padStart(2,'0')}).join('');}
+// Toggle between locked and unlocked editor mode
 function toggleLock(){if(unlocked)lock();else{document.getElementById('pinModal').classList.add('open');setTimeout(function(){document.getElementById('pinInput').focus();},100);}}
+// Close PIN modal and clear inputs
 function closePin(){document.getElementById('pinModal').classList.remove('open');document.getElementById('pinInput').value='';document.getElementById('pinError').classList.remove('show');}
+// Verify PIN and unlock editor mode if correct
 async function checkPin(){
   var pin=document.getElementById('pinInput').value;
-  var h=await hashPin(pin);
+  var h=await hashPin(pin);  // Hash entered PIN
   if(h===PIN_HASH){
     unlocked=true;closePin();
     document.getElementById('lockBtn').textContent='🔓 Editor mode';
@@ -351,6 +377,7 @@ async function checkPin(){
     document.getElementById('pinInput').focus();
   }
 }
+// Lock editor mode and hide editing controls
 function lock(){
   unlocked=false;
   document.getElementById('lockBtn').innerHTML='&#128274; Editor access';
@@ -360,19 +387,21 @@ function lock(){
   render();showToast('Editor mode disabled');
 }
 
-// ── Add / Edit / Delete ───────────────────────────────────────────────────
+// ── Add / Edit / Delete Record Functions ──────────────────────────────────────────
+// Open modal to add a new record
 function openAdd(){
   editId=null;
   document.getElementById('modalTitle').textContent='Add record';
   document.getElementById('deleteBtn').style.display='none';
-  ['b','f','a','c','s','z','e'].forEach(function(k){document.getElementById('f_'+k).value='';});
-  document.getElementById('f_t').value='Agriculture';
+  ['b','f','a','c','s','z','e'].forEach(function(k){document.getElementById('f_'+k).value='';});  // Clear all form fields
+  document.getElementById('f_t').value='Agriculture';  // Set default license type
   document.getElementById('editModal').classList.add('open');
   document.getElementById('f_b').focus();
 }
+// Open modal to edit an existing record
 function openEdit(id){
-  var d=D.find(function(r){return r.id===id});if(!d)return;
-  editId=id;
+  var d=D.find(function(r){return r.id===id});if(!d)return;  // Find record by ID
+  editId=id;  // Store ID for save operation
   document.getElementById('modalTitle').textContent='Edit record';
   document.getElementById('deleteBtn').style.display='';
   document.getElementById('f_b').value=d.b;document.getElementById('f_f').value=d.f;
@@ -381,8 +410,10 @@ function openEdit(id){
   document.getElementById('f_e').value=d.e;document.getElementById('f_t').value=d.t;
   document.getElementById('editModal').classList.add('open');
 }
+// Close edit modal and reset state
 function closeEdit(){document.getElementById('editModal').classList.remove('open');editId=null;}
 
+// Save new or updated record to database
 async function saveRecord(){
   var rec={business_name:document.getElementById('f_b').value.trim(),first_name:document.getElementById('f_f').value.trim(),address:document.getElementById('f_a').value.trim(),city:document.getElementById('f_c').value.trim(),state:document.getElementById('f_s').value.trim().toUpperCase(),zip:document.getElementById('f_z').value.trim(),expires:document.getElementById('f_e').value.trim(),license_type:document.getElementById('f_t').value};
   if(!rec.business_name){document.getElementById('f_b').focus();return;}
@@ -404,10 +435,11 @@ async function saveRecord(){
   btn.disabled=false;btn.textContent='Save';
 }
 
+// Delete record after user confirmation
 async function deleteRecord(){
   if(editId===null)return;
   var d=D.find(function(r){return r.id===editId});
-  if(!confirm('Delete "'+d.b+'"? This cannot be undone.'))return;
+  if(!confirm('Delete "'+d.b+'"? This cannot be undone.'))return;  // Require user confirmation
   try{
     await apiFetch('tax_exempt?id=eq.'+editId,{method:'DELETE'});
     D=D.filter(function(r){return r.id!==editId});
@@ -415,8 +447,10 @@ async function deleteRecord(){
   } catch(err){showToast('Error: '+err.message);}
 }
 
+// Display temporary notification toast message
 function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}
 
+// Initialize application
 loadAll();
 </script>
 </body>
